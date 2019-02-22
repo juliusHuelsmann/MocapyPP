@@ -1249,8 +1249,8 @@ template<typename T>
 void MDArray<T>::clip(double minimum, double maximum) {
 	if (shape.size() == 1) {
 		for (uint i = 0; i < values.size(); i++) {
-			values[i] = max(minimum, values[i]);
-			values[i] = min(maximum, values[i]);
+			values[i] = std::max<double>(minimum, values[i]);
+			values[i] = std::min<double>(maximum, values[i]);
 		}
 	} else {
 		for (uint i = 0; i < A.size(); i++) {
@@ -1643,28 +1643,18 @@ void MDArray<T>::inv() {
   // Use LU decomposition
   int m = n;
   int info, lwork;
-  int *ipiv = NULL;
-  double *work = NULL;
+  int *ipiv = static_cast<decltype(ipiv)>(malloc(sizeof(ipiv)*m));
+  double *work = static_cast<decltype(work)>(malloc(sizeof(*work) * 1));
   int err = 0;
-  
-  ipiv = (int*) malloc(m * sizeof *ipiv);
-  if (ipiv == NULL) {
-    fputs("out of memory\n", stderr);
-    return ;
-  }
-  
-  work = (double*) malloc(sizeof *work);
-  if (work == NULL) {
-    fputs("out of memory\n", stderr);
-    err = 1;
-    goto bailout;
-  }   
 
-
+  //XXX: this code is very fucked up. Check what is being done with double* work and ipiv*
+  //     if htey are not reallocated make them const (in the functions that receive them)
+  //     and continue to use the stack instead of the free store.
+  
   __CLPK_doublereal a[n*n];
   flat_array(a);
   
-  dgetrf_(&m, &n, a, &m, ipiv, &info);   
+  dgetrf_(&m, &n, a, &m, ipiv, &info);
 
   if (info != 0) {
     fprintf(stderr, "dgetrf: info = %d\n", info);
@@ -1683,9 +1673,9 @@ void MDArray<T>::inv() {
   }
   
   lwork = (int) work[0];
-  
-  work = (double*) realloc(work, lwork * sizeof *work);
-  if (work == NULL) {
+
+  work = static_cast<decltype(work)>(realloc(&work, lwork * sizeof(*work)));
+  if (work == nullptr) {
     fputs("out of memory\n", stderr);
     err = 1;
     goto bailout;
@@ -1699,11 +1689,10 @@ void MDArray<T>::inv() {
   }
   
  bailout:
-  
-  free(ipiv);
-  free(work);
+	free(work);
+	free(ipiv);
+
   set_values(a);
-  return ;
 }
 
 // Return a (left multiplying) matrix that mirrors p onto q.
